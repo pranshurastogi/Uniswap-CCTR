@@ -4,7 +4,7 @@
        alt="xRange logo"
        width="120" />
 </p>
-> A revolutionary Uniswap v4 hook that automatically maintains active liquidity positions and migrates them across chains for optimal yield.
+> A Uniswap v4 hook that automatically maintains active liquidity positions and migrates them across chains for optimal yield.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hardhat](https://img.shields.io/badge/Built%20with-Hardhat-FFDB1C.svg)](https://hardhat.org/)

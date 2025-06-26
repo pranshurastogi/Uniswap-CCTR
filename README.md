@@ -1,5 +1,9 @@
-# 🌉 Cross-Chain Trailing-Range Rebalancer
-
+# Cross-Chain Trailing-Range Rebalancer - xRange
+<p align="left">
+  <img src="https://github.com/user-attachments/assets/19fd19ed-bc9a-4239-adbd-fe6344ecb433"
+       alt="xRange logo"
+       width="120" />
+</p>
 > A revolutionary Uniswap v4 hook that automatically maintains active liquidity positions and migrates them across chains for optimal yield.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -15,6 +19,10 @@ The Cross-Chain Trailing-Range Rebalancer is an advanced DeFi infrastructure pro
 - **Intelligent Rebalancing**: Dynamic tick range adjustment based on price movements
 - **Yield Optimization**: Cross-chain migration for better returns
 - **Capital Efficiency**: Maximized fee capture for liquidity providers
+
+<img width="1439" alt="Screenshot 2025-06-26 at 5 18 05 PM" src="https://github.com/user-attachments/assets/3ed4764c-5324-41e4-956d-ab694aece155" />
+<img width="1439" alt="Screenshot 2025-06-26 at 5 18 46 PM" src="https://github.com/user-attachments/assets/80b2ce9d-7b32-4987-9141-05332bc66390" />
+
 
 ### 🎯 Key Features
 

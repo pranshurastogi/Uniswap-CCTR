@@ -6,6 +6,8 @@
 [![Hardhat](https://img.shields.io/badge/Built%20with-Hardhat-FFDB1C.svg)](https://hardhat.org/)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-blue.svg)](https://docs.soliditylang.org/)
 
+---
+
 ## 🚀 Overview
 
 The Cross-Chain Trailing-Range Rebalancer is an advanced DeFi infrastructure project that combines:
@@ -16,426 +18,275 @@ The Cross-Chain Trailing-Range Rebalancer is an advanced DeFi infrastructure pro
 - **Yield Optimization**: Cross-chain migration for better returns
 - **Capital Efficiency**: Maximized fee capture for liquidity providers
 
-### 🎯 Key Features
+---
 
-- ✅ **Automatic Rebalancing**: Keeps liquidity positions centered around market price
-- ✅ **Cross-Chain Migration**: Moves liquidity to chains with better yields
-- ✅ **Gas Optimization**: Smart cooldown mechanisms and profitability checks
-- ✅ **Multi-Chain Support**: Ethereum, Polygon, Arbitrum, Optimism, Base
-- ✅ **Emergency Controls**: Pause mechanisms and emergency withdrawals
-- ✅ **Real-time Monitoring**: Comprehensive tracking and analytics
+## 🏗️ High-Level Architecture
 
-## 🏗️ Architecture
+### System Component Diagram
 
 ```mermaid
-graph TB
-    A[Uniswap V4 Pool] --> B[TrailingRangeHook]
-    B --> C[Position Rebalancer]
-    B --> D[Cross-Chain Monitor]
-    D --> E[AcrossIntegration]
-    E --> F[Across Protocol]
-    F --> G[Destination Chain]
-    
-    H[Yield Oracle] --> D
-    I[Gas Price Monitor] --> D
-    J[Profitability Calculator] --> D
-    
-    style B fill:#ff6b6b
-    style E fill:#4ecdc4
-    style F fill:#45b7d1
+graph TD
+    subgraph OnChain
+        A[Uniswap V4 Pool]
+        B[TrailingRangeHook]
+        C[Position Rebalancer]
+        D[CrossChainRebalancer]
+        E[AcrossIntegration]
+        F[Across Protocol]
+    end
+    subgraph OffChain
+        G[Monitor Script]
+        H[Yield Oracle]
+        I[Gas Price Monitor]
+        J[Profitability Calculator]
+    end
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    G --> D
+    H --> G
+    I --> G
+    J --> G
 ```
 
-### Core Components
+**Explanation:**
+- **Uniswap V4 Pool**: Where liquidity is provided.
+- **TrailingRangeHook**: The main hook contract, intercepts pool events and manages position logic.
+- **Position Rebalancer**: Adjusts tick ranges and liquidity based on price.
+- **CrossChainRebalancer**: Orchestrates migration of liquidity across chains.
+- **AcrossIntegration**: Handles cross-chain messaging and bridging via Across Protocol.
+- **Monitor Script**: Off-chain bot that monitors events, triggers rebalances, and submits transactions.
+- **Oracles/Monitors**: Feed real-time data (yield, gas, profitability) to the system.
 
-1. **TrailingRangeHook.sol**: Main Uniswap v4 hook contract
-2. **AcrossIntegration.sol**: Cross-chain bridging logic
-3. **CrossChainRebalancer.sol**: Migration orchestration
-4. **PositionMath.sol**: Mathematical calculations
-5. **CrossChainUtils.sol**: Utility functions
+---
 
-## 📋 Prerequisites
+### Sequence Diagram: Rebalancing Flow (Single Chain)
 
-Before you begin, ensure you have:
+```mermaid
+sequenceDiagram
+    participant User
+    participant PoolManager
+    participant TrailingRangeHook
+    participant PositionRebalancer
+    participant MonitorScript
 
-- Node.js (v16+ recommended)
-- npm or yarn
-- Git
-- Access to RPC endpoints for supported chains
-
-## 🛠️ Installation & Setup
-
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-cd Uniswap-CCTR/xRange
+    User->>PoolManager: Swap/Add/Remove Liquidity
+    PoolManager->>TrailingRangeHook: Trigger Hook
+    TrailingRangeHook->>PositionRebalancer: Check if Rebalance Needed
+    alt Rebalance Required
+        PositionRebalancer->>TrailingRangeHook: Adjust Range
+        TrailingRangeHook->>PoolManager: Update Position
+    else No Rebalance
+        TrailingRangeHook-->>PoolManager: No Action
+    end
+    MonitorScript->>TrailingRangeHook: Manual/Forced Rebalance (if needed)
 ```
 
-### 2. Install Dependencies
+---
 
-```bash
-npm install
+### Sequence Diagram: Cross-Chain Migration
+
+```mermaid
+sequenceDiagram
+    participant MonitorScript
+    participant CrossChainRebalancer
+    participant AcrossIntegration
+    participant AcrossProtocol
+    participant DestinationChain
+
+    MonitorScript->>CrossChainRebalancer: Check Yield/Gas/Profitability
+    alt Profitable
+        CrossChainRebalancer->>AcrossIntegration: Initiate Migration
+        AcrossIntegration->>AcrossProtocol: Bridge Assets
+        AcrossProtocol->>DestinationChain: Deliver Assets
+        DestinationChain->>CrossChainRebalancer: Finalize Migration
+    else Not Profitable
+        CrossChainRebalancer-->>MonitorScript: No Action
+    end
 ```
 
-### 3. Environment Configuration
+---
 
-Create a `.env` file in the `xRange` directory:
+## 🧩 Core Contracts & Components
 
-```env
-# Private Keys
-PRIVATE_KEY=your_private_key_here
+### 1. `TrailingRangeHook.sol`
+- **Purpose:** Implements Uniswap v4 hook interface to manage liquidity positions automatically.
+- **Key Functions:**
+  - `onSwap()`: Triggers on every swap, checks if rebalance is needed.
+  - `manualRebalance()`: Allows off-chain bot or manager to force a rebalance.
+  - `setPoolConfig()`: Configures thresholds, tick ranges, and cross-chain settings.
+- **Interactions:**
+  - Reads pool state, interacts with PositionMath for calculations, calls CrossChainRebalancer for migrations.
 
-# RPC URLs
-ETHEREUM_RPC_URL=https://mainnet.infura.io/v3/your-key
-POLYGON_RPC_URL=https://polygon-rpc.com
-ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
-OPTIMISM_RPC_URL=https://mainnet.optimism.io
-BASE_RPC_URL=https://mainnet.base.org
+### 2. `AcrossIntegration.sol`
+- **Purpose:** Handles cross-chain asset bridging using Across Protocol.
+- **Key Functions:**
+  - `bridgeAssets()`: Initiates a bridge transaction to another chain.
+  - `setSpokePool()`: Configures supported chains and spoke pools.
+  - `updateYieldData()`: Receives yield/gas data from oracles.
+- **Interactions:**
+  - Called by CrossChainRebalancer, interacts with Across Protocol contracts.
 
-# API Keys for Verification
-ETHERSCAN_API_KEY=your_etherscan_key
-POLYGONSCAN_API_KEY=your_polygonscan_key
-ARBISCAN_API_KEY=your_arbiscan_key
-OPTIMISM_API_KEY=your_optimism_key
-BASESCAN_API_KEY=your_basescan_key
+### 3. `CrossChainRebalancer.sol`
+- **Purpose:** Orchestrates cross-chain migration logic and profitability checks.
+- **Key Functions:**
+  - `estimateMigrationProfitability()`: Calculates if migration is worth it.
+  - `initiateMigration()`: Starts the migration process.
+  - `pause()`: Emergency pause for all migrations.
+- **Interactions:**
+  - Calls AcrossIntegration, receives data from Monitor Script.
 
-# Additional Config
-REPORT_GAS=true
-COINMARKETCAP_API_KEY=your_cmc_key
-VERIFY_CONTRACTS=true
+### 4. `PositionMath.sol`
+- **Purpose:** Pure math library for tick and liquidity calculations.
+- **Key Functions:**
+  - `calculateNewRange()`: Computes optimal tick range.
+  - `liquidityDelta()`: Determines how much liquidity to add/remove.
 
-# Token Addresses (for monitoring)
-USDC_ADDRESS=0xA0b86a33E6417b8d0d7e9f9E2e4e2e8E4e2e8E4e
-WETH_ADDRESS=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+### 5. `CrossChainUtils.sol`
+- **Purpose:** Utility functions for cross-chain operations (encoding, chain IDs, etc).
+
+---
+
+## 🔄 Detailed Flow Explanations
+
+### A. On-Chain Rebalancing (Single Chain)
+1. **Trigger:**
+   - Swap or liquidity event occurs in Uniswap v4 pool.
+2. **Hook Activation:**
+   - `TrailingRangeHook` intercepts the event.
+3. **Rebalance Check:**
+   - Compares current price to range center, checks cooldown and thresholds.
+4. **Rebalance Execution:**
+   - If needed, calculates new tick range and updates position.
+5. **Result:**
+   - Liquidity stays centered, maximizing fee capture.
+
+### B. Cross-Chain Migration
+1. **Monitoring:**
+   - Off-chain Monitor Script fetches yield, gas, and price data from oracles.
+2. **Profitability Calculation:**
+   - Calls `estimateMigrationProfitability()` on `CrossChainRebalancer`.
+3. **Migration Decision:**
+   - If profitable, triggers `initiateMigration()`.
+4. **Bridging:**
+   - `AcrossIntegration` bridges assets to target chain via Across Protocol.
+5. **Finalization:**
+   - On destination chain, new position is created and managed by hook.
+
+### C. Yield & Gas Monitoring
+- **Oracles** feed real-time data to the Monitor Script.
+- **Monitor Script** aggregates data, triggers rebalances/migrations as needed.
+
+---
+
+## 🧑‍💻 Technical Deep Dive
+
+### Uniswap v4 Hooks
+- Hooks are smart contracts that can intercept and react to pool events (swaps, liquidity changes).
+- `TrailingRangeHook` implements the IHooks interface, allowing it to:
+  - Automatically rebalance positions
+  - Enforce custom logic (cooldowns, thresholds)
+  - Trigger cross-chain migrations
+
+### Cross-Chain Messaging & Bridging
+- Uses Across Protocol for secure, fast asset transfers between chains.
+- `AcrossIntegration` abstracts the bridging logic, supporting multiple chains and tokens.
+- Migration is only triggered if yield improvement exceeds gas and slippage costs.
+
+### Gas Optimization
+- **Cooldowns:** Prevents frequent rebalancing.
+- **Batching:** Combines multiple actions in a single transaction when possible.
+- **Gas Price Monitoring:** Waits for favorable gas conditions before acting.
+
+### Security Mechanisms
+- **Access Control:** Only owner/managers can change configs or trigger emergency actions.
+- **Emergency Pause:** Can halt all operations in case of abnormal conditions.
+- **Slippage Protection:** Limits on max slippage during migrations.
+- **Profitability Checks:** Ensures migrations are only done when economically viable.
+
+---
+
+## 📊 Monitoring & Analytics
+
+### Monitor Script
+- **Purpose:** Off-chain bot that watches on-chain events, yield, and gas data.
+- **Features:**
+  - Detects when rebalancing or migration is needed
+  - Submits transactions to contracts
+  - Logs events and alerts
+- **Data Sources:**
+  - On-chain events
+  - Oracles (yield, gas, price)
+
+### Data Flow Diagram
+
+```mermaid
+graph LR
+    A[Oracles: Yield, Gas, Price] --> B[Monitor Script]
+    B --> C[CrossChainRebalancer]
+    C --> D[AcrossIntegration]
+    D --> E[Across Protocol]
+    E --> F[Destination Chain]
+    B --> G[Logging/Analytics]
 ```
 
-### 4. Compile Contracts
+---
 
-```bash
-npx hardhat compile
-```
-
-## 🚢 Deployment
-
-### Local Development
-
-```bash
-# Start local Hardhat network
-npx hardhat node
-
-# Deploy to local network
-npx hardhat run scripts/deploy.js --network localhost
-```
-
-### Testnet Deployment
-
-```bash
-# Deploy to Polygon Mumbai
-npx hardhat run scripts/deploy.js --network polygon
-
-# Deploy to Arbitrum Goerli
-npx hardhat run scripts/deploy.js --network arbitrum
-```
-
-### Mainnet Deployment
-
-```bash
-# Deploy to Ethereum mainnet
-npx hardhat run scripts/deploy.js --network mainnet
-
-# Verify contracts
-VERIFY_CONTRACTS=true npx hardhat run scripts/deploy.js --network mainnet
-```
-
-## 🧪 Testing
-
-### Run All Tests
-
-```bash
-npm test
-```
-
-### Run Specific Test Suites
-
-```bash
-# Unit tests for TrailingRangeHook
-npx hardhat test test/TrailingRangeHook.test.js
-
-# Integration tests
-npx hardhat test test/integration.test.js
-
-# Gas optimization tests
-REPORT_GAS=true npx hardhat test
-```
-
-### Test Coverage
-
-```bash
-npx hardhat coverage
-```
-
-## 📊 Monitoring
-
-### Start Real-time Monitoring
-
-```bash
-node scripts/monitor.js
-```
-
-### Monitor Features
-
-- **Rebalancing Events**: Track position adjustments
-- **Cross-chain Migrations**: Monitor yield-driven migrations
-- **Gas Price Monitoring**: Alert on high gas conditions
-- **Health Checks**: Ensure system availability
-- **Yield Opportunities**: Identify profitable migrations
-
-### Monitor Output Example
-
-```
-🚀 Initializing Cross-Chain Rebalancer Monitor...
-📡 Connected to chain 1
-📡 Connected to chain 137
-📜 Loaded contracts for chain 1
-✅ Monitor initialized successfully
-
-🔄 Rebalance detected on chain 1:
-  Pool ID: 0x1234567890...
-  Ticks: 69000 to 69200
-  Liquidity: 1000.5 ETH
-
-💰 Yield opportunity found:
-  Current Chain: 1
-  Best Chain: 137
-  Yield Difference: 2.50%
-```
-
-## 🎮 Usage Examples
-
-### Basic Hook Integration
-
-```solidity
-// Initialize pool with TrailingRangeHook
-PoolKey memory key = PoolKey({
-    currency0: USDC,
-    currency1: WETH,
-    fee: 3000,
-    tickSpacing: 60,
-    hooks: IHooks(trailingRangeHook)
-});
-
-// Hook automatically manages positions during swaps
-poolManager.swap(key, swapParams, "");
-```
-
-### Manual Rebalancing
-
-```javascript
-const { ethers } = require("hardhat");
-
-async function manualRebalance() {
-    const hook = await ethers.getContractAt("TrailingRangeHook", hookAddress);
-    
-    const rebalanceParams = {
-        poolId: poolId,
-        newLowerTick: 69000,
-        newUpperTick: 69200,
-        liquidityDelta: ethers.utils.parseEther("100"),
-        forceRebalance: false,
-        maxSlippage: 500 // 5%
-    };
-    
-    await hook.manualRebalance(rebalanceParams);
-}
-```
-
-### Cross-Chain Migration
-
-```javascript
-async function initiateMigration() {
-    const rebalancer = await ethers.getContractAt("CrossChainRebalancer", rebalancerAddress);
-    
-    // Check if migration is profitable
-    const [isProfitable, profitEstimate] = await rebalancer.estimateMigrationProfitability(
-        137, // Polygon
-        USDC.address,
-        WETH.address,
-        ethers.utils.parseUnits("10000", 6) // $10k
-    );
-    
-    if (isProfitable) {
-        await rebalancer.initiateMigration(
-            USDC.address,
-            WETH.address,
-            ethers.utils.parseUnits("10000", 6),
-            ethers.utils.parseEther("5"),
-            137 // target chain
-        );
-    }
-}
-```
-
-## ⚙️ Configuration
-
-### Pool Configuration
-
-```javascript
-// Set pool-specific parameters
-await hook.setPoolConfig(
-    poolId,
-    200,  // 2% rebalance threshold
-    120,  // 120 ticks range width
-    true  // cross-chain enabled
-);
-```
-
-### Cross-Chain Configuration
-
-```javascript
-// Configure supported chains
-await hook.setCrossChainConfig(
-    137,  // Polygon chain ID
-    spokePoolAddress,
-    ethers.utils.parseUnits("50", "gwei"), // 50 gwei gas threshold
-    100   // 1% yield threshold
-);
-```
-
-### Yield Data Updates
-
-```javascript
-// Update yield data (typically done by oracles)
-await acrossIntegration.updateYieldData(
-    137,  // chain ID
-    USDC.address,
-    WETH.address,
-    800,  // 8% APY (in basis points)
-    ethers.utils.parseEther("1000000"), // TVL
-    ethers.utils.parseUnits("2", "gwei") // gas price
-);
-```
-
-## 🔐 Security Considerations
-
-### Access Control
-
-- **Owner-only functions**: Contract deployment, configuration changes
-- **Authorized managers**: Pool management, emergency actions
-- **Multi-sig recommended**: For production deployments
-
-### Emergency Mechanisms
-
-```javascript
-// Emergency pause
-await hook.emergencyPause(poolId, "High volatility detected");
-
-// Emergency withdrawal
-await hook.emergencyWithdraw(poolId);
-
-// Global system pause
-await crossChainRebalancer.pause();
-```
-
-### Risk Management
-
-- **Slippage protection**: Maximum 10% slippage on migrations
-- **Cooldown periods**: Prevent rapid rebalancing
-- **Profitability checks**: Ensure migrations are economically viable
-- **Gas price limits**: Avoid operations during high gas periods
-
-## 📈 Gas Optimization
-
-### Estimated Gas Costs
-
-| Operation | Ethereum | Polygon | Arbitrum | Optimism |
-|-----------|----------|---------|----------|----------|
-| Rebalancing | ~300K gas | ~250K gas | ~280K gas | ~270K gas |
-| Migration Init | ~200K gas | ~150K gas | ~180K gas | ~170K gas |
-| Yield Update | ~80K gas | ~60K gas | ~70K gas | ~65K gas |
-
-### Optimization Strategies
-
-- **Batch operations**: Combine multiple actions
-- **Smart cooldowns**: Prevent unnecessary rebalancing
-- **Gas price monitoring**: Wait for favorable conditions
-- **Efficient data structures**: Minimize storage operations
-
-## 🌐 Multi-Chain Support
-
-### Supported Networks
-
-| Network | Chain ID | Status | Spoke Pool |
-|---------|----------|--------|------------|
-| Ethereum | 1 | ✅ Active | 0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5 |
-| Polygon | 137 | ✅ Active | 0x9295ee1d8C5b022Be115A2AD3c30C72E34e7F096 |
-| Arbitrum | 42161 | ✅ Active | 0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A |
-| Optimism | 10 | ✅ Active | 0x6f26Bf09B1C792e3228e5467807a900A503c0281 |
-| Base | 8453 | ✅ Active | 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64 |
+## ⚙️ Configuration & Extensibility
 
 ### Adding New Chains
+- Call `setSpokePool(newChainId, spokePoolAddress)` on `AcrossIntegration`.
+- Call `setSupportedChain(newChainId, true)` on `CrossChainRebalancer`.
 
-```javascript
-// Add new chain support
-await acrossIntegration.setSpokePool(newChainId, spokePoolAddress);
-await crossChainRebalancer.setSupportedChain(newChainId, true);
+### Tuning Parameters
+- Use `setPoolConfig()` on `TrailingRangeHook` to adjust:
+  - Rebalance threshold
+  - Tick range width
+  - Cross-chain enable/disable
+- Use `setCrossChainConfig()` to set:
+  - Gas price threshold
+  - Yield improvement threshold
+
+---
+
+## 🧪 Testing & Development
+
+### Writing New Tests
+- Place test files in `test/` directory.
+- Use Hardhat's test runner: `npx hardhat test`.
+- Simulate cross-chain events by mocking oracle data and bridge calls.
+
+### Local Simulation
+- Start local Hardhat node: `npx hardhat node`
+- Deploy contracts: `npx hardhat run scripts/deploy.js --network localhost`
+- Run monitor: `node scripts/monitor.js`
+
+---
+
+## 📈 Visuals & State Machines
+
+### State Machine: Position Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active
+    Active --> Rebalancing: Price moves
+    Rebalancing --> Active: Range updated
+    Active --> Migrating: Yield opportunity
+    Migrating --> Active: Migration complete
+    Active --> Paused: Emergency
+    Paused --> Active: Resume
 ```
 
-## 🔍 Troubleshooting
-
-### Common Issues
-
-**1. Deployment Failures**
-```bash
-# Check network configuration
-npx hardhat verify --network <network> <contract-address>
-
-# Verify RPC connectivity
-curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' <RPC_URL>
-```
-
-**2. Rebalancing Not Triggering**
-- Check cooldown period hasn't expired
-- Verify price movement exceeds threshold
-- Ensure sufficient liquidity for operations
-
-**3. Cross-Chain Migration Failures**
-- Verify Across Protocol spoke pools are active
-- Check token balances and approvals
-- Ensure migration is profitable after fees
-
-### Debug Mode
-
-```bash
-# Enable verbose logging
-DEBUG=true node scripts/monitor.js
-
-# Run tests with detailed output
-npx hardhat test --verbose
-```
-
-## 🤝 Contributing
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass: `npm test`
-6. Commit changes: `git commit -m 'Add amazing feature'`
-7. Push to branch: `git push origin feature/amazing-feature`
-8. Open a Pull Request
-
-### Code Standards
-
-- Follow Solidity style guide
-- Add comprehensive tests
-- Include documentation for new features
-- Use meaningful commit messages
+---
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
 
 ## 🙏 Acknowledgments
 
@@ -443,13 +294,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Across Protocol**: For secure cross-chain infrastructure
 - **OpenZeppelin**: For battle-tested smart contract libraries
 - **Hardhat**: For excellent development tooling
-
-## 📞 Support
-
-- **Documentation**: [Read the full docs](docs/)
-- **Discord**: [Join our community](https://discord.gg/example)
-- **Issues**: [Report bugs](https://github.com/example/issues)
-- **Email**: support@example.com
 
 ---
 
